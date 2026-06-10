@@ -52,6 +52,8 @@
   }
 
   /* --- homepage gallery wall --------------------------------------------- */
+  let wallTiles = []; // flat list of tile elements, kept across re-layouts
+
   function buildMosaic() {
     const mosaic = byId("mosaic");
     if (!mosaic) return;
@@ -64,14 +66,12 @@
       return;
     }
 
-    const frag = document.createDocumentFragment();
-
-    works.forEach((w, i) => {
+    wallTiles = works.map((w, i) => {
       const tile = document.createElement("a");
       tile.className = "tile";
       tile.href = `piece.html?id=${encodeURIComponent(w.id)}`;
       tile.dataset.idx = i;
-      tile.dataset.ratio = (w.height / w.width).toFixed(4); // h / w
+      tile.dataset.aspect = (w.width / w.height).toFixed(4); // w / h
       tile.setAttribute("aria-label", `${w.title} — learn more`);
 
       tile.innerHTML = `
@@ -86,12 +86,11 @@
           </span>
         </span>`;
 
-      frag.appendChild(tile);
+      return tile;
     });
 
-    mosaic.appendChild(frag);
     layoutWall();
-    revealOnScroll(Array.from(mosaic.querySelectorAll(".tile")), true);
+    revealOnScroll(wallTiles, true);
 
     let resizeTimer;
     window.addEventListener("resize", function () {
@@ -100,57 +99,86 @@
     });
   }
 
-  /* Size and pack the wall: every frame keeps its artwork's aspect ratio,
-     while a seeded size weight gives strong variation between pieces. A
-     square base unit (cols == row height) plus dense flow does the packing. */
+  /* Justified gallery layout: pack tiles into rows and scale each row to
+     fill the available width exactly, so edges stay flush and there are no
+     holes. Every frame keeps its artwork's aspect ratio; sizes vary because
+     each row settles at a different height. The last row stays at the target
+     height and is centred rather than stretched. */
   function layoutWall() {
     const mosaic = byId("mosaic");
-    if (!mosaic) return;
-    const tiles = Array.from(mosaic.querySelectorAll(".tile"));
-    if (!tiles.length) return;
+    if (!mosaic || !wallTiles.length) return;
 
     const vw = window.innerWidth;
-    const cols =
-      vw < 560 ? 6 : vw < 780 ? 8 : vw < 1040 ? 10 : vw < 1340 ? 12 : vw < 1640 ? 13 : 14;
-
     const cs = getComputedStyle(mosaic);
-    const gap = parseFloat(cs.gap) || 10;
-    const innerW =
+    const W =
       mosaic.clientWidth -
       parseFloat(cs.paddingLeft) -
       parseFloat(cs.paddingRight);
-    const unit = (innerW - gap * (cols - 1)) / cols; // square base cell (px)
 
-    mosaic.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-    mosaic.style.gridAutoRows = `${unit}px`;
+    const gap = clampNum(vw * 0.008, 8, 14); // matches CSS gap
+    const pad = clampNum(vw * 0.005, 5, 12); // frame mat
+    const edge = pad + 1; // mat + 1px border on each side
+    const targetH = vw < 560 ? 158 : vw < 900 ? 210 : vw < 1300 ? 248 : 286;
 
-    // Size weights expressed as a fraction of the wall width (the long side
-    // of each frame). A spread of values keeps some pieces big, some small.
-    const fracs = [0.5, 0.42, 0.36, 0.3, 0.46, 0.33, 0.26, 0.4, 0.29, 0.38];
-
-    tiles.forEach((tile) => {
-      const ratio = parseFloat(tile.dataset.ratio) || 1; // h / w
-      const seed = Number(tile.dataset.idx) || 0;
-      // deterministic but well-scattered pick so neighbours differ
-      const h = (seed * 2654435761) >>> 0;
-      let long = Math.max(2, Math.round(cols * fracs[h % fracs.length]));
-      long = Math.min(long, cols);
-
-      let colSpan, rowSpan;
-      if (ratio <= 1) {
-        // landscape / square — width is the long side
-        colSpan = long;
-        rowSpan = Math.max(2, Math.round(long * ratio));
-      } else {
-        // portrait — height is the long side
-        rowSpan = long;
-        colSpan = Math.max(2, Math.round(long / ratio));
+    // group tiles into rows: keep adding until a row at targetH overflows W
+    const rows = [];
+    let row = [];
+    let aspectSum = 0;
+    wallTiles.forEach((tile) => {
+      const a = parseFloat(tile.dataset.aspect) || 1;
+      row.push(tile);
+      aspectSum += a;
+      const natural = aspectSum * targetH + 2 * edge * row.length + gap * (row.length - 1);
+      if (natural >= W) {
+        rows.push({ tiles: row, aspectSum, justify: true });
+        row = [];
+        aspectSum = 0;
       }
-      colSpan = Math.min(colSpan, cols);
-
-      tile.style.gridColumn = `span ${colSpan}`;
-      tile.style.gridRow = `span ${rowSpan}`;
     });
+    if (row.length) rows.push({ tiles: row, aspectSum, justify: false });
+
+    // avoid stranding a single frame alone on the last row — fold it back
+    // into the previous row and justify them together
+    if (rows.length > 1 && rows[rows.length - 1].tiles.length === 1) {
+      const last = rows.pop();
+      const prev = rows[rows.length - 1];
+      prev.tiles.push(last.tiles[0]);
+      prev.aspectSum += parseFloat(last.tiles[0].dataset.aspect) || 1;
+      prev.justify = true;
+    }
+
+    // (re)build the row wrappers and size every frame
+    const frag = document.createDocumentFragment();
+    rows.forEach(({ tiles, aspectSum, justify }) => {
+      const n = tiles.length;
+      const avail = W - 2 * edge * n - gap * (n - 1);
+      const h = justify
+        ? avail / aspectSum
+        : Math.min(targetH, avail / aspectSum); // never overflow, never upscale
+
+      const rowEl = document.createElement("div");
+      rowEl.className = "wall-row";
+      rowEl.style.gap = `${gap}px`;
+      if (!justify) rowEl.style.marginInline = "auto";
+
+      tiles.forEach((tile) => {
+        const a = parseFloat(tile.dataset.aspect) || 1;
+        const mediaW = Math.round(a * h);
+        const mediaH = Math.round(h);
+        tile.style.padding = `${pad}px`;
+        const media = tile.querySelector(".tile__media");
+        media.style.width = `${mediaW}px`;
+        media.style.height = `${mediaH}px`;
+        rowEl.appendChild(tile);
+      });
+      frag.appendChild(rowEl);
+    });
+
+    mosaic.replaceChildren(frag);
+  }
+
+  function clampNum(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
   }
 
   /* --- detail page ------------------------------------------------------- */
