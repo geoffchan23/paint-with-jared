@@ -12,7 +12,6 @@
   const byId = (id) => document.getElementById(id);
   const works = Array.isArray(window.ARTWORKS) ? window.ARTWORKS : [];
   const findWork = (id) => works.find((w) => w.id === id);
-  const ratioPct = (w) => ((w.height / w.width) * 100).toFixed(3);
   const sizeLabel = (w) => `${w.width} × ${w.height} in`;
 
   /* --- page-load fade + footer year + header scroll state ---------------- */
@@ -52,7 +51,7 @@
     nodes.forEach((n) => io.observe(n));
   }
 
-  /* --- homepage mosaic --------------------------------------------------- */
+  /* --- homepage gallery wall --------------------------------------------- */
   function buildMosaic() {
     const mosaic = byId("mosaic");
     if (!mosaic) return;
@@ -72,25 +71,86 @@
       tile.className = "tile";
       tile.href = `piece.html?id=${encodeURIComponent(w.id)}`;
       tile.dataset.idx = i;
+      tile.dataset.ratio = (w.height / w.width).toFixed(4); // h / w
       tile.setAttribute("aria-label", `${w.title} — learn more`);
 
       tile.innerHTML = `
-        <div class="tile__media" style="padding-bottom:${ratioPct(w)}%">
+        <span class="tile__media">
           <img class="tile__img" src="${w.thumb}" alt="${escapeHtml(
         w.title
       )}" loading="lazy" decoding="async" />
-        </div>
-        <div class="tile__overlay">
-          <span class="tile__meta">${escapeHtml(w.medium)}</span>
-          <span class="tile__title">${escapeHtml(w.title)}</span>
-          <span class="tile__cta">Learn more ${arrow}</span>
-        </div>`;
+          <span class="tile__overlay">
+            <span class="tile__meta">${escapeHtml(w.medium)}</span>
+            <span class="tile__title">${escapeHtml(w.title)}</span>
+            <span class="tile__cta">Learn more ${arrow}</span>
+          </span>
+        </span>`;
 
       frag.appendChild(tile);
     });
 
     mosaic.appendChild(frag);
+    layoutWall();
     revealOnScroll(Array.from(mosaic.querySelectorAll(".tile")), true);
+
+    let resizeTimer;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(layoutWall, 150);
+    });
+  }
+
+  /* Size and pack the wall: every frame keeps its artwork's aspect ratio,
+     while a seeded size weight gives strong variation between pieces. A
+     square base unit (cols == row height) plus dense flow does the packing. */
+  function layoutWall() {
+    const mosaic = byId("mosaic");
+    if (!mosaic) return;
+    const tiles = Array.from(mosaic.querySelectorAll(".tile"));
+    if (!tiles.length) return;
+
+    const vw = window.innerWidth;
+    const cols =
+      vw < 560 ? 6 : vw < 780 ? 8 : vw < 1040 ? 10 : vw < 1340 ? 12 : vw < 1640 ? 13 : 14;
+
+    const cs = getComputedStyle(mosaic);
+    const gap = parseFloat(cs.gap) || 10;
+    const innerW =
+      mosaic.clientWidth -
+      parseFloat(cs.paddingLeft) -
+      parseFloat(cs.paddingRight);
+    const unit = (innerW - gap * (cols - 1)) / cols; // square base cell (px)
+
+    mosaic.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    mosaic.style.gridAutoRows = `${unit}px`;
+
+    // Size weights expressed as a fraction of the wall width (the long side
+    // of each frame). A spread of values keeps some pieces big, some small.
+    const fracs = [0.5, 0.42, 0.36, 0.3, 0.46, 0.33, 0.26, 0.4, 0.29, 0.38];
+
+    tiles.forEach((tile) => {
+      const ratio = parseFloat(tile.dataset.ratio) || 1; // h / w
+      const seed = Number(tile.dataset.idx) || 0;
+      // deterministic but well-scattered pick so neighbours differ
+      const h = (seed * 2654435761) >>> 0;
+      let long = Math.max(2, Math.round(cols * fracs[h % fracs.length]));
+      long = Math.min(long, cols);
+
+      let colSpan, rowSpan;
+      if (ratio <= 1) {
+        // landscape / square — width is the long side
+        colSpan = long;
+        rowSpan = Math.max(2, Math.round(long * ratio));
+      } else {
+        // portrait — height is the long side
+        rowSpan = long;
+        colSpan = Math.max(2, Math.round(long / ratio));
+      }
+      colSpan = Math.min(colSpan, cols);
+
+      tile.style.gridColumn = `span ${colSpan}`;
+      tile.style.gridRow = `span ${rowSpan}`;
+    });
   }
 
   /* --- detail page ------------------------------------------------------- */
