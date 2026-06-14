@@ -12,7 +12,6 @@
   const byId = (id) => document.getElementById(id);
   const works = Array.isArray(window.ARTWORKS) ? window.ARTWORKS : [];
   const findWork = (id) => works.find((w) => w.id === id);
-  const sizeLabel = (w) => `${w.width} × ${w.height} in`;
 
   /* --- page-load fade + footer year + header scroll state ---------------- */
   function chrome() {
@@ -201,7 +200,31 @@
 
     document.title = `${work.title} — Jared Augustin`;
     const metaDesc = document.querySelector('meta[name="description"]');
-    if (metaDesc) metaDesc.setAttribute("content", work.description);
+    if (metaDesc)
+      metaDesc.setAttribute(
+        "content",
+        work.description || `${work.title} — a work by Jared Augustin.`
+      );
+
+    // Build only the spec rows we actually have values for.
+    const specs = [
+      ["Medium", work.medium],
+      ["Year", work.year],
+      ["Size", work.size],
+    ]
+      .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "")
+      .map(
+        ([label, value]) => `
+          <div class="spec">
+            <span class="spec__label">${escapeHtml(label)}</span>
+            <span class="spec__value">${escapeHtml(value)}</span>
+          </div>`
+      )
+      .join("");
+
+    const descHtml = work.description
+      ? `<p class="detail__desc reveal">${escapeHtml(work.description)}</p>`
+      : "";
 
     const section = document.createElement("div");
     section.className = "detail__grid";
@@ -211,17 +234,8 @@
       </figure>
       <div class="detail__info">
         <h1 class="detail__title reveal">${escapeHtml(work.title)}</h1>
-        <p class="detail__desc reveal">${escapeHtml(work.description)}</p>
-        <div class="detail__specs reveal">
-          <div class="spec">
-            <span class="spec__label">Medium</span>
-            <span class="spec__value">${escapeHtml(work.medium)}</span>
-          </div>
-          <div class="spec">
-            <span class="spec__label">Canvas size</span>
-            <span class="spec__value">${sizeLabel(work)}</span>
-          </div>
-        </div>
+        ${descHtml}
+        <div class="detail__specs reveal">${specs}</div>
       </div>`;
     detail.appendChild(section);
 
