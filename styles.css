@@ -7,7 +7,7 @@
   --bg: darkred;          /* site background */
   --bg-elevated: #ffffff;
   --ink: #000000;         /* black text */
-  --ink-soft: #5c5b56;    /* muted text */
+  --ink-soft: #000000;    /* secondary text — black */
   --line: #e3e1db;        /* hairline borders */
   --accent: #1a1a18;      /* buttons / emphasis */
   --overlay: rgba(20, 20, 18, 0.42);
@@ -25,7 +25,7 @@
     --bg: darkred;
     --bg-elevated: #1a1a18;
     --ink: #000000;
-    --ink-soft: #a3a199;
+    --ink-soft: #000000;
     --line: #2c2b28;
     --accent: #f1efe9;
     --overlay: rgba(8, 8, 7, 0.55);
