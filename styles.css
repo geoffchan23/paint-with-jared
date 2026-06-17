@@ -4,9 +4,9 @@
    ========================================================================== */
 
 :root {
-  --bg: #f7f6f3;          /* warm gallery white */
+  --bg: darkred;          /* site background */
   --bg-elevated: #ffffff;
-  --ink: #1a1a18;         /* near-black text */
+  --ink: #000000;         /* black text */
   --ink-soft: #5c5b56;    /* muted text */
   --line: #e3e1db;        /* hairline borders */
   --accent: #1a1a18;      /* buttons / emphasis */
@@ -22,9 +22,9 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #121211;
+    --bg: darkred;
     --bg-elevated: #1a1a18;
-    --ink: #f1efe9;
+    --ink: #000000;
     --ink-soft: #a3a199;
     --line: #2c2b28;
     --accent: #f1efe9;
@@ -64,7 +64,8 @@ img { display: block; max-width: 100%; }
   z-index: 50;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 1rem;
   padding: 1.4rem clamp(1.2rem, 4vw, 3rem);
   background: color-mix(in srgb, var(--bg) 82%, transparent);
   backdrop-filter: saturate(140%) blur(10px);
@@ -85,6 +86,7 @@ img { display: block; max-width: 100%; }
 .nav {
   display: flex;
   gap: clamp(1rem, 3vw, 2.2rem);
+  margin-left: auto;
   font-size: 0.82rem;
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -93,7 +95,8 @@ img { display: block; max-width: 100%; }
 .nav a {
   position: relative;
   padding-bottom: 2px;
-  color: var(--ink-soft);
+  color: var(--ink);
+  font-weight: 700;
   transition: color var(--med) var(--ease);
 }
 
