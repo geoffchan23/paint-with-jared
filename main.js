@@ -239,11 +239,14 @@
     mosaic.replaceChildren(frag);
   }
 
-  /* True-to-scale wall: every piece is sized from its real-world inches at a
-     single pixels-per-inch, so sizes are accurate relative to each other.
-     The scale adapts to the viewport (the largest piece fills a set fraction
-     of the width); pieces flow and wrap into centred rows with wall-like
-     gaps — no attempt to tile flush. */
+  /* Real-size wall, perceptually balanced. Literal true-scale makes the 55"
+     pieces dwarf the small ones and leaves big empty bands, so we COMPRESS
+     the size range: each piece's drawn size scales with (long edge)^SCALE_K.
+     SCALE_K = 1 is literal true scale; SCALE_K → 0 makes every piece equal
+     (like the gallery). The middle keeps real sizes clearly ordered and felt
+     without the awkward extremes. Aspect ratios are never touched. */
+  const SCALE_K = 0.6;
+
   function layoutScale() {
     const mosaic = byId("mosaic");
     if (!mosaic || !wallTiles.length) return;
@@ -255,30 +258,31 @@
       parseFloat(cs.paddingLeft) -
       parseFloat(cs.paddingRight);
 
-    // biggest real-world edge across the collection drives the shared scale
-    let maxEdge = 1;
+    const longOf = (t) =>
+      Math.max(parseFloat(t.dataset.realw) || 1, parseFloat(t.dataset.realh) || 1);
+
+    // the largest piece (by compressed metric) anchors the scale
+    let maxMetric = 1;
     wallTiles.forEach((t) => {
-      maxEdge = Math.max(
-        maxEdge,
-        parseFloat(t.dataset.realw) || 0,
-        parseFloat(t.dataset.realh) || 0
-      );
+      maxMetric = Math.max(maxMetric, Math.pow(longOf(t), SCALE_K));
     });
 
     // largest piece spans this fraction of the available width
-    const frac = vw < 700 ? 0.9 : vw < 1100 ? 0.62 : 0.5;
-    const ppi = (W * frac) / maxEdge;
-    const pad = clampNum(ppi * 0.4, 2, 9); // uniform frame mat
-    const gap = clampNum(ppi * 2, 16, 48);
+    const frac = vw < 700 ? 0.85 : vw < 1100 ? 0.55 : 0.46;
+    const F = (W * frac) / maxMetric; // px per (inch^K) at the top end
+    const pad = clampNum(vw * 0.004, 3, 8); // uniform frame mat
+    const gap = clampNum(vw * 0.014, 14, 32);
 
     const frag = document.createDocumentFragment();
     wallTiles.forEach((tile) => {
       const rw = parseFloat(tile.dataset.realw) || 10;
       const rh = parseFloat(tile.dataset.realh) || 10;
+      const long = Math.max(rw, rh);
+      const scale = (F * Math.pow(long, SCALE_K)) / long; // px-per-inch, this piece
       tile.style.padding = `${pad}px`;
       const media = tile.querySelector(".tile__media");
-      media.style.width = `${Math.round(rw * ppi)}px`;
-      media.style.height = `${Math.round(rh * ppi)}px`;
+      media.style.width = `${Math.round(rw * scale)}px`;
+      media.style.height = `${Math.round(rh * scale)}px`;
       frag.appendChild(tile);
     });
 
