@@ -53,6 +53,23 @@
   /* --- homepage gallery wall --------------------------------------------- */
   let wallTiles = []; // flat list of tile elements, kept across re-layouts
 
+  /* The homepage has two layouts: the justified "Gallery" wall and a
+     "True scale" wall where every piece is sized by its real-world inches.
+     The choice lives in the URL (?view=) so it can be shared, and is
+     remembered in localStorage. */
+  const VIEW_KEY = "pwj-view";
+  let viewMode = resolveView(); // "gallery" | "scale"
+
+  function resolveView() {
+    const u = new URLSearchParams(window.location.search).get("view");
+    if (u === "scale" || u === "gallery") return u; // a shared link wins
+    try {
+      return localStorage.getItem(VIEW_KEY) === "scale" ? "scale" : "gallery";
+    } catch (e) {
+      return "gallery";
+    }
+  }
+
   function buildMosaic() {
     const mosaic = byId("mosaic");
     if (!mosaic) return;
@@ -71,6 +88,8 @@
       tile.href = `piece.html?id=${encodeURIComponent(w.id)}`;
       tile.dataset.idx = i;
       tile.dataset.aspect = (w.width / w.height).toFixed(4); // w / h
+      tile.dataset.realw = w.realW || w.width; // real-world inches (scale view)
+      tile.dataset.realh = w.realH || w.height;
       tile.setAttribute("aria-label", `${w.title} — learn more`);
 
       tile.innerHTML = `
@@ -88,14 +107,58 @@
       return tile;
     });
 
-    layoutWall();
+    buildToggle(mosaic);
+    mosaic.classList.toggle("mosaic--scale", viewMode === "scale");
+    renderLayout();
     revealOnScroll(wallTiles, true);
 
     let resizeTimer;
     window.addEventListener("resize", function () {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(layoutWall, 150);
+      resizeTimer = setTimeout(renderLayout, 150);
     });
+  }
+
+  /* --- view toggle (Gallery  <->  True scale) ---------------------------- */
+  function buildToggle(mosaic) {
+    const bar = document.createElement("div");
+    bar.className = "view-toggle-bar";
+    bar.innerHTML = `
+      <div class="view-toggle" role="group" aria-label="Gallery layout">
+        <button type="button" data-view="gallery">Gallery</button>
+        <button type="button" data-view="scale">True scale</button>
+      </div>`;
+    mosaic.parentNode.insertBefore(bar, mosaic);
+    bar.querySelectorAll("button").forEach((b) =>
+      b.addEventListener("click", () => setView(b.dataset.view))
+    );
+    updateToggle();
+  }
+
+  function updateToggle() {
+    document.querySelectorAll(".view-toggle button").forEach((b) =>
+      b.setAttribute("aria-pressed", String(b.dataset.view === viewMode))
+    );
+  }
+
+  function setView(mode) {
+    if (mode === viewMode || (mode !== "gallery" && mode !== "scale")) return;
+    viewMode = mode;
+    try {
+      localStorage.setItem(VIEW_KEY, mode);
+    } catch (e) {}
+    const url = new URL(window.location.href);
+    url.searchParams.set("view", mode);
+    window.history.replaceState(null, "", url);
+    byId("mosaic").classList.toggle("mosaic--scale", mode === "scale");
+    updateToggle();
+    renderLayout();
+    window.scrollTo({ top: 0 });
+  }
+
+  function renderLayout() {
+    if (viewMode === "scale") layoutScale();
+    else layoutWall();
   }
 
   /* Justified gallery layout: pack tiles into rows and scale each row to
@@ -173,6 +236,53 @@
       frag.appendChild(rowEl);
     });
 
+    mosaic.replaceChildren(frag);
+  }
+
+  /* True-to-scale wall: every piece is sized from its real-world inches at a
+     single pixels-per-inch, so sizes are accurate relative to each other.
+     The scale adapts to the viewport (the largest piece fills a set fraction
+     of the width); pieces flow and wrap into centred rows with wall-like
+     gaps — no attempt to tile flush. */
+  function layoutScale() {
+    const mosaic = byId("mosaic");
+    if (!mosaic || !wallTiles.length) return;
+
+    const vw = window.innerWidth;
+    const cs = getComputedStyle(mosaic);
+    const W =
+      mosaic.clientWidth -
+      parseFloat(cs.paddingLeft) -
+      parseFloat(cs.paddingRight);
+
+    // biggest real-world edge across the collection drives the shared scale
+    let maxEdge = 1;
+    wallTiles.forEach((t) => {
+      maxEdge = Math.max(
+        maxEdge,
+        parseFloat(t.dataset.realw) || 0,
+        parseFloat(t.dataset.realh) || 0
+      );
+    });
+
+    // largest piece spans this fraction of the available width
+    const frac = vw < 700 ? 0.9 : vw < 1100 ? 0.62 : 0.5;
+    const ppi = (W * frac) / maxEdge;
+    const pad = clampNum(ppi * 0.4, 2, 9); // uniform frame mat
+    const gap = clampNum(ppi * 2, 16, 48);
+
+    const frag = document.createDocumentFragment();
+    wallTiles.forEach((tile) => {
+      const rw = parseFloat(tile.dataset.realw) || 10;
+      const rh = parseFloat(tile.dataset.realh) || 10;
+      tile.style.padding = `${pad}px`;
+      const media = tile.querySelector(".tile__media");
+      media.style.width = `${Math.round(rw * ppi)}px`;
+      media.style.height = `${Math.round(rh * ppi)}px`;
+      frag.appendChild(tile);
+    });
+
+    mosaic.style.setProperty("--scale-gap", `${gap}px`);
     mosaic.replaceChildren(frag);
   }
 
