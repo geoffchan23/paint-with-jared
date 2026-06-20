@@ -170,6 +170,14 @@
     const mosaic = byId("mosaic");
     if (!mosaic || !wallTiles.length) return;
 
+    // undo any absolute positioning left by the scale (packed) layout
+    mosaic.style.height = "";
+    wallTiles.forEach((t) => {
+      t.style.position = "";
+      t.style.left = "";
+      t.style.top = "";
+    });
+
     const vw = window.innerWidth;
     const cs = getComputedStyle(mosaic);
     const W =
@@ -247,6 +255,11 @@
      without the awkward extremes. Aspect ratios are never touched. */
   const SCALE_K = 0.6;
 
+  /* Lay the real-sized pieces out with a skyline bin-packer: each piece keeps
+     its true size, and is dropped into the lowest open slot across the width.
+     That packs the wall tightly (filling the space, with some honest odd gaps)
+     instead of leaving the big vertical holes a centred-rows layout creates.
+     Tiles are absolutely positioned; the container height is set to the pack. */
   function layoutScale() {
     const mosaic = byId("mosaic");
     if (!mosaic || !wallTiles.length) return;
@@ -268,26 +281,64 @@
     });
 
     // largest piece spans this fraction of the available width
-    const frac = vw < 700 ? 0.85 : vw < 1100 ? 0.55 : 0.46;
+    const frac = vw < 700 ? 0.9 : vw < 1100 ? 0.58 : 0.48;
     const F = (W * frac) / maxMetric; // px per (inch^K) at the top end
     const pad = clampNum(vw * 0.004, 3, 8); // uniform frame mat
-    const gap = clampNum(vw * 0.014, 14, 32);
+    const border = 1;
+    const gap = clampNum(vw * 0.012, 10, 26); // breathing room between frames
 
-    const frag = document.createDocumentFragment();
-    wallTiles.forEach((tile) => {
+    // size every piece (true relative size, aspect preserved) → outer boxes
+    const boxes = wallTiles.map((tile) => {
       const rw = parseFloat(tile.dataset.realw) || 10;
       const rh = parseFloat(tile.dataset.realh) || 10;
       const long = Math.max(rw, rh);
       const scale = (F * Math.pow(long, SCALE_K)) / long; // px-per-inch, this piece
-      tile.style.padding = `${pad}px`;
-      const media = tile.querySelector(".tile__media");
-      media.style.width = `${Math.round(rw * scale)}px`;
-      media.style.height = `${Math.round(rh * scale)}px`;
-      frag.appendChild(tile);
+      const mediaW = Math.max(1, Math.round(rw * scale));
+      const mediaH = Math.max(1, Math.round(rh * scale));
+      const frame = 2 * (pad + border);
+      return { tile, mediaW, mediaH, outerW: mediaW + frame, outerH: mediaH + frame };
     });
 
-    mosaic.style.setProperty("--scale-gap", `${gap}px`);
-    mosaic.replaceChildren(frag);
+    // skyline pack: place taller pieces first for a tighter fit, each into the
+    // window of columns whose current top is lowest (ties → leftmost)
+    const BIN = 6;
+    const cols = Math.max(1, Math.ceil(W / BIN));
+    const heights = new Array(cols).fill(0);
+    let packedH = 0;
+    const order = boxes.slice().sort((a, b) => b.outerH - a.outerH);
+
+    order.forEach((b) => {
+      const wBins = Math.min(cols, Math.max(1, Math.ceil((b.outerW + gap) / BIN)));
+      let bestStart = 0;
+      let bestY = Infinity;
+      for (let s = 0; s + wBins <= cols; s++) {
+        let y = 0;
+        for (let k = s; k < s + wBins; k++) if (heights[k] > y) y = heights[k];
+        if (y < bestY) {
+          bestY = y;
+          bestStart = s;
+        }
+      }
+      b.x = bestStart * BIN;
+      b.y = bestY;
+      const newTop = bestY + b.outerH + gap;
+      for (let k = bestStart; k < bestStart + wBins; k++) heights[k] = newTop;
+      if (bestY + b.outerH > packedH) packedH = bestY + b.outerH;
+    });
+
+    boxes.forEach((b) => {
+      const t = b.tile;
+      t.style.position = "absolute";
+      t.style.left = `${b.x}px`;
+      t.style.top = `${b.y}px`;
+      t.style.padding = `${pad}px`;
+      const media = t.querySelector(".tile__media");
+      media.style.width = `${b.mediaW}px`;
+      media.style.height = `${b.mediaH}px`;
+    });
+
+    mosaic.replaceChildren(...wallTiles);
+    mosaic.style.height = `${packedH}px`;
   }
 
   function clampNum(v, lo, hi) {

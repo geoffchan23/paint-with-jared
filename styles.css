@@ -143,14 +143,11 @@ img { display: block; max-width: 100%; }
   /* horizontal gap is set inline by main.js to match the layout maths */
 }
 
-/* True-scale wall: a single wrapping row of frames sized in main.js from
-   each piece's real-world inches; centred with wall-like gaps. */
+/* True-scale wall: frames are sized from each piece's real-world inches and
+   absolutely positioned by a skyline packer in main.js (height set inline). */
 .mosaic--scale {
-  flex-direction: row;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
-  gap: var(--scale-gap, 28px);
+  display: block;
+  position: relative;
 }
 
 /* ---- View toggle ---------------------------------------------------------- */
