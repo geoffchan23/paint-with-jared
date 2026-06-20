@@ -112,6 +112,12 @@
     renderLayout();
     revealOnScroll(wallTiles, true);
 
+    // Re-run once the page has settled: the first layout is computed before a
+    // vertical scrollbar appears, and that scrollbar then narrows the content
+    // width — recompute so the scale wall never clips at the right edge.
+    requestAnimationFrame(() => requestAnimationFrame(renderLayout));
+    window.addEventListener("load", renderLayout);
+
     let resizeTimer;
     window.addEventListener("resize", function () {
       clearTimeout(resizeTimer);
@@ -301,38 +307,91 @@
       return { tile, mediaW, mediaH, outerW: mediaW + frame, outerH: mediaH + frame };
     });
 
-    // Order tallest-first so each row groups pieces of similar height — that
-    // keeps the vertical gaps within a row small (a row's height is its
-    // tallest piece). The wall then reads largest-at-top to smallest-at-bottom.
-    const ordered = boxes.slice().sort((a, b) => b.outerH - a.outerH);
+    // Order tallest-first; the tallest remaining piece ANCHORS each row's
+    // height, and the leftover width beside it is filled with COLUMNS of
+    // smaller pieces stacked to roughly match that height. This pulls small
+    // works up next to big ones, so the wall mixes sizes instead of marching
+    // uniformly large-to-small. True sizes are never changed.
+    const pool = boxes.slice().sort((a, b) => b.outerH - a.outerH);
+    const colWidthOf = (col) => Math.max(...col.map((b) => b.outerW));
+    const colHeightOf = (col) =>
+      col.reduce((s, b, i) => s + b.outerH + (i ? gap : 0), 0);
 
-    // greedily group into rows that fit the width (true sizes, no stretching)
-    const rowWidth = (r) =>
-      r.reduce((s, b, i) => s + b.outerW + (i ? gap : 0), 0);
-    const rows = [];
-    let row = [];
-    ordered.forEach((b) => {
-      if (row.length && rowWidth(row) + gap + b.outerW > W) {
-        rows.push(row);
-        row = [];
+    // Build one vertical stack. `cap` limits how tall any single piece may be
+    // (as a fraction of maxH): the anchor column uses 1 (any piece), while
+    // filler columns use a smaller cap so two or three SMALL works stack to
+    // match the anchor's height instead of one big neighbour standing alone.
+    // Picks the tallest piece allowed each step for a snug fit.
+    function buildColumn(maxH, maxW, cap) {
+      const limit = maxH * cap;
+      const col = [];
+      for (;;) {
+        const remH = maxH - colHeightOf(col) - (col.length ? gap : 0);
+        const lim = Math.min(limit, remH);
+        let best = -1;
+        for (let i = 0; i < pool.length; i++) {
+          const b = pool[i];
+          if (b.outerW <= maxW && b.outerH <= lim) {
+            if (best < 0 || b.outerH > pool[best].outerH) best = i;
+          }
+        }
+        if (best < 0) break;
+        col.push(pool.splice(best, 1)[0]);
       }
-      row.push(b);
-    });
-    if (row.length) rows.push(row);
+      return col;
+    }
+
+    // Each filler piece may be at most this fraction of the row height, so a
+    // filler column always stacks at least two pieces (pulling small works up
+    // beside the big ones). 0.6 → roughly halves the row.
+    const FILL_CAP = 0.6;
+    const minW = Math.min(...boxes.map((b) => b.outerW));
+    const rows = [];
+    while (pool.length) {
+      const rowH = pool[0].outerH; // tallest remaining anchors the row height
+      const cols = [];
+      let usedW = 0;
+      while (pool.length) {
+        const remW = W - usedW - (cols.length ? gap : 0);
+        if (remW < minW) break;
+        let col;
+        if (cols.length === 0) {
+          col = buildColumn(rowH, remW, 1); // the anchor: any size
+        } else {
+          col = buildColumn(rowH, remW, FILL_CAP); // small works stacked
+          if (!col.length) col = buildColumn(rowH, remW, 1); // fallback: same-size
+        }
+        if (!col.length) break;
+        cols.push(col);
+        usedW += colWidthOf(col) + (cols.length > 1 ? gap : 0);
+      }
+      if (!cols.length) break; // safety: guarantees progress
+      rows.push(cols);
+    }
 
     // breathing room above the first row and below the last (matches the
     // gallery view's generous top/bottom whitespace)
     const gutter = clampNum(vw * 0.03, 28, 64);
 
-    // place each row: centred horizontally, pieces centred on the row midline
+    // place each row: centred horizontally; each column hung on the row midline,
+    // each piece centred within its column's width
     let y = gutter;
-    rows.forEach((r) => {
-      const rowH = Math.max(...r.map((b) => b.outerH));
-      let x = (W - rowWidth(r)) / 2; // centre the row in the available width
-      r.forEach((b) => {
-        b.x = x;
-        b.y = y + (rowH - b.outerH) / 2;
-        x += b.outerW + gap;
+    rows.forEach((cols) => {
+      const rowH = Math.max(...cols.map(colHeightOf));
+      const rowW = cols.reduce(
+        (s, c, i) => s + colWidthOf(c) + (i ? gap : 0),
+        0
+      );
+      let x = (W - rowW) / 2; // centre the row in the available width
+      cols.forEach((col) => {
+        const cw = colWidthOf(col);
+        let cy = y + (rowH - colHeightOf(col)) / 2; // centre the stack vertically
+        col.forEach((b) => {
+          b.x = x + (cw - b.outerW) / 2; // centre piece within its column
+          b.y = cy;
+          cy += b.outerH + gap;
+        });
+        x += cw + gap;
       });
       y += rowH + gap;
     });
