@@ -320,8 +320,12 @@
     });
     if (row.length) rows.push(row);
 
+    // breathing room above the first row and below the last (matches the
+    // gallery view's generous top/bottom whitespace)
+    const gutter = clampNum(vw * 0.03, 28, 64);
+
     // place each row: centred horizontally, pieces centred on the row midline
-    let y = 0;
+    let y = gutter;
     rows.forEach((r) => {
       const rowH = Math.max(...r.map((b) => b.outerH));
       let x = (W - rowWidth(r)) / 2; // centre the row in the available width
@@ -344,8 +348,10 @@
       media.style.height = `${b.mediaH}px`;
     });
 
+    // total height = last row bottom (y already past the final row's gap) plus
+    // a generous bottom gutter, so there's clear space above the footer
     mosaic.replaceChildren(...wallTiles);
-    mosaic.style.height = `${Math.round(Math.max(0, y - gap))}px`;
+    mosaic.style.height = `${Math.round(Math.max(0, y - gap) + gutter * 1.6)}px`;
   }
 
   function clampNum(v, lo, hi) {
