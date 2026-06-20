@@ -87,6 +87,7 @@
       tile.className = "tile";
       tile.href = `piece.html?id=${encodeURIComponent(w.id)}`;
       tile.dataset.idx = i;
+      tile.dataset.pid = w.id; // piece id (scale view can curate by piece)
       tile.dataset.aspect = (w.width / w.height).toFixed(4); // w / h
       tile.dataset.realw = w.realW || w.width; // real-world inches (scale view)
       tile.dataset.realh = w.realH || w.height;
@@ -261,6 +262,15 @@
      without the awkward extremes. Aspect ratios are never touched. */
   const SCALE_K = 0.6;
 
+  /* Curating hint: pin a specific piece's anchor to a side of its row instead
+     of the automatic left/right/centre rotation. Keyed by piece id; values are
+     "left" | "right" | "centre". Edit freely to art-direct the scale wall. */
+  const ANCHOR_SIDE = {
+    "deathly-awe": "right",
+    "the-heart-of-man-is-impossible-to-hold-19-26": "centre",
+    "before-we-knew-we-were-naked": "right",
+  };
+
   /* Lay the real-sized pieces out in centred rows: each row is filled across
      the width with pieces at their true relative sizes (never scaled to fit),
      then centred horizontally and hung on a common middle line. This fills the
@@ -367,16 +377,37 @@
       const anchor = wantFeature ? features.shift() : pool.shift();
       if (!anchor) break; // safety: guarantees progress
       const rowH = anchor.outerH;
-      const cols = [[anchor]];
-      let usedW = colWidthOf(cols[0]);
+      const anchorCol = [anchor];
+      const fillers = [];
+      let usedW = colWidthOf(anchorCol);
       while (pool.length) {
         const remW = W - usedW - gap;
         if (remW < minW) break;
         let col = buildColumn(rowH, remW, FILL_CAP); // small works stacked
         if (!col.length) col = buildColumn(rowH, remW, 1); // fallback: same-size
         if (!col.length) break;
-        cols.push(col);
+        fillers.push(col);
         usedW += colWidthOf(col) + gap;
+      }
+
+      // Vary which side the anchor (the big piece) sits on so the large works
+      // aren't all stuck to the left edge: rotate left / right / centre across
+      // rows, unless a piece is pinned to a side in ANCHOR_SIDE. Reordering
+      // columns doesn't change the row's width, only the left-to-right order,
+      // so the centred row maths still holds.
+      const side =
+        ANCHOR_SIDE[anchor.tile.dataset.pid] ||
+        ["left", "right", "centre"][rowIndex % 3];
+      let cols;
+      if (!fillers.length) {
+        cols = [anchorCol]; // alone in its row → already centred
+      } else if (side === "left") {
+        cols = [anchorCol, ...fillers];
+      } else if (side === "right") {
+        cols = [...fillers, anchorCol];
+      } else {
+        const mid = Math.ceil(fillers.length / 2); // centre
+        cols = [...fillers.slice(0, mid), anchorCol, ...fillers.slice(mid)];
       }
       rows.push(cols);
       rowIndex++;
