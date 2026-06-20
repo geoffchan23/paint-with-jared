@@ -255,10 +255,11 @@
      without the awkward extremes. Aspect ratios are never touched. */
   const SCALE_K = 0.6;
 
-  /* Lay the real-sized pieces out with a skyline bin-packer: each piece keeps
-     its true size, and is dropped into the lowest open slot across the width.
-     That packs the wall tightly (filling the space, with some honest odd gaps)
-     instead of leaving the big vertical holes a centred-rows layout creates.
+  /* Lay the real-sized pieces out in centred rows: each row is filled across
+     the width with pieces at their true relative sizes (never scaled to fit),
+     then centred horizontally and hung on a common middle line. This fills the
+     wall top-down with no big top voids, stays centred, and keeps true scale —
+     the only gaps are the honest ones above/below shorter pieces in a row.
      Tiles are absolutely positioned; the container height is set to the pack. */
   function layoutScale() {
     const mosaic = byId("mosaic");
@@ -280,12 +281,13 @@
       maxMetric = Math.max(maxMetric, Math.pow(longOf(t), SCALE_K));
     });
 
-    // largest piece spans this fraction of the available width
-    const frac = vw < 700 ? 0.9 : vw < 1100 ? 0.58 : 0.48;
+    // largest piece spans this fraction of the available width — kept modest
+    // so two or more pieces share each row (even the big ones, and on phones)
+    const frac = vw < 700 ? 0.46 : vw < 1100 ? 0.52 : 0.42;
     const F = (W * frac) / maxMetric; // px per (inch^K) at the top end
     const pad = clampNum(vw * 0.004, 3, 8); // uniform frame mat
     const border = 1;
-    const gap = clampNum(vw * 0.012, 10, 26); // breathing room between frames
+    const gap = clampNum(vw * 0.014, 12, 30); // breathing room between frames
 
     // size every piece (true relative size, aspect preserved) → outer boxes
     const boxes = wallTiles.map((tile) => {
@@ -299,38 +301,43 @@
       return { tile, mediaW, mediaH, outerW: mediaW + frame, outerH: mediaH + frame };
     });
 
-    // skyline pack: place taller pieces first for a tighter fit, each into the
-    // window of columns whose current top is lowest (ties → leftmost)
-    const BIN = 6;
-    const cols = Math.max(1, Math.ceil(W / BIN));
-    const heights = new Array(cols).fill(0);
-    let packedH = 0;
-    const order = boxes.slice().sort((a, b) => b.outerH - a.outerH);
+    // Order tallest-first so each row groups pieces of similar height — that
+    // keeps the vertical gaps within a row small (a row's height is its
+    // tallest piece). The wall then reads largest-at-top to smallest-at-bottom.
+    const ordered = boxes.slice().sort((a, b) => b.outerH - a.outerH);
 
-    order.forEach((b) => {
-      const wBins = Math.min(cols, Math.max(1, Math.ceil((b.outerW + gap) / BIN)));
-      let bestStart = 0;
-      let bestY = Infinity;
-      for (let s = 0; s + wBins <= cols; s++) {
-        let y = 0;
-        for (let k = s; k < s + wBins; k++) if (heights[k] > y) y = heights[k];
-        if (y < bestY) {
-          bestY = y;
-          bestStart = s;
-        }
+    // greedily group into rows that fit the width (true sizes, no stretching)
+    const rowWidth = (r) =>
+      r.reduce((s, b, i) => s + b.outerW + (i ? gap : 0), 0);
+    const rows = [];
+    let row = [];
+    ordered.forEach((b) => {
+      if (row.length && rowWidth(row) + gap + b.outerW > W) {
+        rows.push(row);
+        row = [];
       }
-      b.x = bestStart * BIN;
-      b.y = bestY;
-      const newTop = bestY + b.outerH + gap;
-      for (let k = bestStart; k < bestStart + wBins; k++) heights[k] = newTop;
-      if (bestY + b.outerH > packedH) packedH = bestY + b.outerH;
+      row.push(b);
+    });
+    if (row.length) rows.push(row);
+
+    // place each row: centred horizontally, pieces centred on the row midline
+    let y = 0;
+    rows.forEach((r) => {
+      const rowH = Math.max(...r.map((b) => b.outerH));
+      let x = (W - rowWidth(r)) / 2; // centre the row in the available width
+      r.forEach((b) => {
+        b.x = x;
+        b.y = y + (rowH - b.outerH) / 2;
+        x += b.outerW + gap;
+      });
+      y += rowH + gap;
     });
 
     boxes.forEach((b) => {
       const t = b.tile;
       t.style.position = "absolute";
-      t.style.left = `${b.x}px`;
-      t.style.top = `${b.y}px`;
+      t.style.left = `${Math.round(b.x)}px`;
+      t.style.top = `${Math.round(b.y)}px`;
       t.style.padding = `${pad}px`;
       const media = t.querySelector(".tile__media");
       media.style.width = `${b.mediaW}px`;
@@ -338,7 +345,7 @@
     });
 
     mosaic.replaceChildren(...wallTiles);
-    mosaic.style.height = `${packedH}px`;
+    mosaic.style.height = `${Math.round(Math.max(0, y - gap))}px`;
   }
 
   function clampNum(v, lo, hi) {
