@@ -307,12 +307,21 @@
       return { tile, mediaW, mediaH, outerW: mediaW + frame, outerH: mediaH + frame };
     });
 
-    // Order tallest-first; the tallest remaining piece ANCHORS each row's
-    // height, and the leftover width beside it is filled with COLUMNS of
-    // smaller pieces stacked to roughly match that height. This pulls small
-    // works up next to big ones, so the wall mixes sizes instead of marching
-    // uniformly large-to-small. True sizes are never changed.
-    const pool = boxes.slice().sort((a, b) => b.outerH - a.outerH);
+    // Each row is anchored by one piece (its height sets the row height) and
+    // the leftover width beside it is filled with COLUMNS of smaller pieces
+    // stacked to match — pulling small works up next to big ones. True sizes
+    // are never changed.
+    //
+    // The catalogue is dominated by a big cluster of similar-size mid works, so
+    // anchoring strictly tallest-first dumps all the drama at the top and
+    // leaves uniform rows at the bottom. Instead we set the few large "feature"
+    // pieces aside and spread them through the whole wall as anchors (~every
+    // other row), so the size contrast reaches the bottom too. `pool` holds
+    // everything else and feeds both the remaining anchors and all fillers.
+    const sorted = boxes.slice().sort((a, b) => b.outerH - a.outerH);
+    const maxOuterH = sorted[0].outerH;
+    const features = sorted.filter((b) => b.outerH >= 0.8 * maxOuterH);
+    const pool = sorted.filter((b) => b.outerH < 0.8 * maxOuterH);
     const colWidthOf = (col) => Math.max(...col.map((b) => b.outerW));
     const colHeightOf = (col) =>
       col.reduce((s, b, i) => s + b.outerH + (i ? gap : 0), 0);
@@ -346,27 +355,31 @@
     // beside the big ones). 0.6 → roughly halves the row.
     const FILL_CAP = 0.6;
     const minW = Math.min(...boxes.map((b) => b.outerW));
+    // drop a feature anchor roughly every other row, spread over the whole wall
+    const FEATURE_EVERY = 2;
     const rows = [];
-    while (pool.length) {
-      const rowH = pool[0].outerH; // tallest remaining anchors the row height
-      const cols = [];
-      let usedW = 0;
+    let rowIndex = 0;
+    while (features.length || pool.length) {
+      // pick this row's anchor: a feature on the spread cadence (or once the
+      // pool is spent), otherwise the tallest remaining ordinary piece
+      const wantFeature =
+        features.length && (rowIndex % FEATURE_EVERY === 0 || !pool.length);
+      const anchor = wantFeature ? features.shift() : pool.shift();
+      if (!anchor) break; // safety: guarantees progress
+      const rowH = anchor.outerH;
+      const cols = [[anchor]];
+      let usedW = colWidthOf(cols[0]);
       while (pool.length) {
-        const remW = W - usedW - (cols.length ? gap : 0);
+        const remW = W - usedW - gap;
         if (remW < minW) break;
-        let col;
-        if (cols.length === 0) {
-          col = buildColumn(rowH, remW, 1); // the anchor: any size
-        } else {
-          col = buildColumn(rowH, remW, FILL_CAP); // small works stacked
-          if (!col.length) col = buildColumn(rowH, remW, 1); // fallback: same-size
-        }
+        let col = buildColumn(rowH, remW, FILL_CAP); // small works stacked
+        if (!col.length) col = buildColumn(rowH, remW, 1); // fallback: same-size
         if (!col.length) break;
         cols.push(col);
-        usedW += colWidthOf(col) + (cols.length > 1 ? gap : 0);
+        usedW += colWidthOf(col) + gap;
       }
-      if (!cols.length) break; // safety: guarantees progress
       rows.push(cols);
+      rowIndex++;
     }
 
     // breathing room above the first row and below the last (matches the
