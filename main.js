@@ -450,7 +450,7 @@
     if (metaDesc)
       metaDesc.setAttribute(
         "content",
-        work.description || `${work.title} — original works by Jared Augustin`
+        work.description || `${work.title} — Original works by Jared Augustin`
       );
 
     // Build only the spec rows we actually have values for.
