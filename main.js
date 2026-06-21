@@ -445,12 +445,12 @@
       return;
     }
 
-    document.title = `${work.title} — Jared Augustin`;
+    document.title = `${work.title} — PaintWithJared`;
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc)
       metaDesc.setAttribute(
         "content",
-        work.description || `${work.title} — a work by Jared Augustin.`
+        work.description || `${work.title} — original works by Jared Augustin`
       );
 
     // Build only the spec rows we actually have values for.
