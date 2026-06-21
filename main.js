@@ -55,20 +55,13 @@
 
   /* The homepage has two layouts: the justified "Gallery" wall and a
      "True scale" wall where every piece is sized by its real-world inches.
-     The choice lives in the URL (?view=) so it can be shared, and is
-     remembered in localStorage. */
-  const VIEW_KEY = "pwj-view";
-  let viewMode = resolveView(); // "gallery" | "scale"
-
-  function resolveView() {
-    const u = new URLSearchParams(window.location.search).get("view");
-    if (u === "scale" || u === "gallery") return u; // a shared link wins
-    try {
-      return localStorage.getItem(VIEW_KEY) === "scale" ? "scale" : "gallery";
-    } catch (e) {
-      return "gallery";
-    }
-  }
+     The view is chosen automatically by viewport width — true scale needs the
+     room of a larger screen, while the justified gallery reads better on a
+     phone — and it switches live when the window crosses the breakpoint. */
+  const SCALE_MIN_WIDTH = 768; // wider than this → true scale; at/under → gallery
+  const viewForWidth = () =>
+    window.innerWidth > SCALE_MIN_WIDTH ? "scale" : "gallery";
+  let viewMode = viewForWidth(); // "gallery" | "scale"
 
   function buildMosaic() {
     const mosaic = byId("mosaic");
@@ -108,7 +101,6 @@
       return tile;
     });
 
-    buildToggle(mosaic);
     mosaic.classList.toggle("mosaic--scale", viewMode === "scale");
     renderLayout();
     revealOnScroll(wallTiles, true);
@@ -122,45 +114,19 @@
     let resizeTimer;
     window.addEventListener("resize", function () {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(renderLayout, 150);
+      resizeTimer = setTimeout(onResize, 150);
     });
   }
 
-  /* --- view toggle (Gallery  <->  True scale) ---------------------------- */
-  function buildToggle(mosaic) {
-    const bar = document.createElement("div");
-    bar.className = "view-toggle-bar";
-    bar.innerHTML = `
-      <div class="view-toggle" role="group" aria-label="Gallery layout">
-        <button type="button" data-view="gallery">Gallery</button>
-        <button type="button" data-view="scale">True scale</button>
-      </div>`;
-    mosaic.parentNode.insertBefore(bar, mosaic);
-    bar.querySelectorAll("button").forEach((b) =>
-      b.addEventListener("click", () => setView(b.dataset.view))
-    );
-    updateToggle();
-  }
-
-  function updateToggle() {
-    document.querySelectorAll(".view-toggle button").forEach((b) =>
-      b.setAttribute("aria-pressed", String(b.dataset.view === viewMode))
-    );
-  }
-
-  function setView(mode) {
-    if (mode === viewMode || (mode !== "gallery" && mode !== "scale")) return;
-    viewMode = mode;
-    try {
-      localStorage.setItem(VIEW_KEY, mode);
-    } catch (e) {}
-    const url = new URL(window.location.href);
-    url.searchParams.set("view", mode);
-    window.history.replaceState(null, "", url);
-    byId("mosaic").classList.toggle("mosaic--scale", mode === "scale");
-    updateToggle();
+  /* Recompute on resize, switching the view automatically when the window
+     crosses the breakpoint (no reload needed). */
+  function onResize() {
+    const next = viewForWidth();
+    if (next !== viewMode) {
+      viewMode = next;
+      byId("mosaic").classList.toggle("mosaic--scale", viewMode === "scale");
+    }
     renderLayout();
-    window.scrollTo({ top: 0 });
   }
 
   function renderLayout() {
@@ -415,7 +381,7 @@
 
     // breathing room above the first row and below the last (matches the
     // gallery view's generous top/bottom whitespace)
-    const gutter = clampNum(vw * 0.03, 28, 64);
+    const gutter = clampNum(vw * 0.035, 40, 72);
 
     // place each row: centred horizontally; each column hung on the row midline,
     // each piece centred within its column's width
