@@ -388,6 +388,14 @@ img { display: block; max-width: 100%; }
 
 .about__body p:nth-child(n + 2) { color: var(--ink-soft); }
 
+/* footnote-style disclaimer at the end of the bio */
+.about__body p.about__disclaimer {
+  font-size: 0.82rem;
+  font-style: italic;
+  color: var(--ink-soft);
+  margin-top: 2rem;
+}
+
 .about__contact {
   margin-top: 3rem;
   padding-top: 2rem;
