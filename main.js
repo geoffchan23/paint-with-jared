@@ -78,7 +78,7 @@
     wallTiles = works.map((w, i) => {
       const tile = document.createElement("a");
       tile.className = "tile";
-      tile.href = `piece.html?id=${encodeURIComponent(w.id)}`;
+      tile.href = `/piece?id=${encodeURIComponent(w.id)}`;
       tile.dataset.idx = i;
       tile.dataset.pid = w.id; // piece id (scale view can curate by piece)
       tile.dataset.aspect = (w.width / w.height).toFixed(4); // w / h
