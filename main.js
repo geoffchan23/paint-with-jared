@@ -445,7 +445,7 @@
       return;
     }
 
-    document.title = `${work.title} — PaintWithJared`;
+    document.title = `${work.title} — PaintwithJared`;
     const metaDesc = document.querySelector('meta[name="description"]');
     if (metaDesc)
       metaDesc.setAttribute(
