@@ -34,6 +34,54 @@
 
 const ARTWORKS = [
   {
+    id: "tuff",
+    title: "Tuff",
+    year: 2026,
+    medium: "Oil on Canvas",
+    size: "",
+    realW: 12, realH: 12,   // size unknown — best-guess inches
+    width: 2000, height: 2000,
+    image: "assets/art/tuff.jpg",
+    thumb: "assets/art/thumbs/tuff.jpg",
+    description: "",
+  },
+  {
+    id: "sugar-mama",
+    title: "Sugar Mama",
+    year: 2026,
+    medium: "Oil on Canvas",
+    size: "",
+    realW: 12, realH: 12,   // size unknown — best-guess inches
+    width: 2000, height: 2000,
+    image: "assets/art/sugar-mama.jpg",
+    thumb: "assets/art/thumbs/sugar-mama.jpg",
+    description: "",
+  },
+  {
+    id: "procedurally-generated-playlist-optimized-streaming-content",
+    title: "Procedurally Generated Playlist Optimized Streaming Content",
+    year: 2026,
+    medium: "Oil Pastel on paper",
+    size: "",
+    realW: 12, realH: 8,   // size unknown — best-guess inches
+    width: 2000, height: 1333,
+    image: "assets/art/procedurally-generated-playlist-optimized-streaming-content.jpg",
+    thumb: "assets/art/thumbs/procedurally-generated-playlist-optimized-streaming-content.jpg",
+    description: "",
+  },
+  {
+    id: "cuffs",
+    title: "Cuffs",
+    year: 2026,
+    medium: "Oil Pastel on panel",
+    size: "",
+    realW: 48, realH: 22.5,   // size unknown — best-guess inches
+    width: 2000, height: 937,
+    image: "assets/art/cuffs.jpg",
+    thumb: "assets/art/thumbs/cuffs.jpg",
+    description: "",
+  },
+  {
     id: "1body2body3body4",
     title: "1Body2Body3Body4",
     year: 2025,
