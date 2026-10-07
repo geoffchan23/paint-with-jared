@@ -25,6 +25,9 @@
  *                  `size`, above.
  *    image       full-size image (shown on the dedicated piece page).
  *    thumb       small image used on the homepage wall (loads fast).
+ *    pinned      optional. true hangs the piece first, at the top of the
+ *                "True scale" wall (which otherwise arranges by size). The
+ *                gallery view always follows the order of this list.
  *    description longer text shown on the dedicated page. Optional — leave
  *                "" and the detail page omits the paragraph.
  *
@@ -35,6 +38,7 @@
 const ARTWORKS = [
   {
     id: "tuff",
+    pinned: true,   // newest work — hung first on the true-scale wall
     title: "Tuff",
     year: 2026,
     medium: "Oil on Canvas",
@@ -47,6 +51,7 @@ const ARTWORKS = [
   },
   {
     id: "sugar-mama",
+    pinned: true,   // newest work — hung first on the true-scale wall
     title: "Sugar Mama",
     year: 2026,
     medium: "Oil on Canvas",
@@ -59,6 +64,7 @@ const ARTWORKS = [
   },
   {
     id: "procedurally-generated-playlist-optimized-streaming-content",
+    pinned: true,   // newest work — hung first on the true-scale wall
     title: "Procedurally Generated Playlist Optimized Streaming Content",
     year: 2026,
     medium: "Oil Pastel on paper",
@@ -71,6 +77,7 @@ const ARTWORKS = [
   },
   {
     id: "cuffs",
+    pinned: true,   // newest work — hung first on the true-scale wall
     title: "Cuffs",
     year: 2026,
     medium: "Oil Pastel on panel",

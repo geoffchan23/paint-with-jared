@@ -84,6 +84,7 @@
       tile.dataset.aspect = (w.width / w.height).toFixed(4); // w / h
       tile.dataset.realw = w.realW || w.width; // real-world inches (scale view)
       tile.dataset.realh = w.realH || w.height;
+      if (w.pinned) tile.dataset.pinned = "1"; // scale view hangs these first
       tile.setAttribute("aria-label", `${w.title} — learn more`);
 
       tile.innerHTML = `
@@ -280,7 +281,8 @@
       const mediaW = Math.max(1, Math.round(rw * scale));
       const mediaH = Math.max(1, Math.round(rh * scale));
       const frame = 2 * (pad + border);
-      return { tile, mediaW, mediaH, outerW: mediaW + frame, outerH: mediaH + frame };
+      const pinned = tile.dataset.pinned === "1";
+      return { tile, pinned, mediaW, mediaH, outerW: mediaW + frame, outerH: mediaH + frame };
     });
 
     // Each row is anchored by one piece (its height sets the row height) and
@@ -294,10 +296,16 @@
     // pieces aside and spread them through the whole wall as anchors (~every
     // other row), so the size contrast reaches the bottom too. `pool` holds
     // everything else and feeds both the remaining anchors and all fillers.
+    //
+    // Pieces marked `pinned` in data.js (e.g. the newest work) skip all that and
+    // are hung first, at the top of the wall; leftover room in their rows is
+    // filled from the pool as usual.
     const sorted = boxes.slice().sort((a, b) => b.outerH - a.outerH);
     const maxOuterH = sorted[0].outerH;
-    const features = sorted.filter((b) => b.outerH >= 0.8 * maxOuterH);
-    const pool = sorted.filter((b) => b.outerH < 0.8 * maxOuterH);
+    const pinned = sorted.filter((b) => b.pinned);
+    const rest = sorted.filter((b) => !b.pinned);
+    const features = rest.filter((b) => b.outerH >= 0.8 * maxOuterH);
+    const pool = rest.filter((b) => b.outerH < 0.8 * maxOuterH);
     const colWidthOf = (col) => Math.max(...col.map((b) => b.outerW));
     const colHeightOf = (col) =>
       col.reduce((s, b, i) => s + b.outerH + (i ? gap : 0), 0);
@@ -307,21 +315,21 @@
     // filler columns use a smaller cap so two or three SMALL works stack to
     // match the anchor's height instead of one big neighbour standing alone.
     // Picks the tallest piece allowed each step for a snug fit.
-    function buildColumn(maxH, maxW, cap) {
+    function buildColumn(src, maxH, maxW, cap) {
       const limit = maxH * cap;
       const col = [];
       for (;;) {
         const remH = maxH - colHeightOf(col) - (col.length ? gap : 0);
         const lim = Math.min(limit, remH);
         let best = -1;
-        for (let i = 0; i < pool.length; i++) {
-          const b = pool[i];
+        for (let i = 0; i < src.length; i++) {
+          const b = src[i];
           if (b.outerW <= maxW && b.outerH <= lim) {
-            if (best < 0 || b.outerH > pool[best].outerH) best = i;
+            if (best < 0 || b.outerH > src[best].outerH) best = i;
           }
         }
         if (best < 0) break;
-        col.push(pool.splice(best, 1)[0]);
+        col.push(src.splice(best, 1)[0]);
       }
       return col;
     }
@@ -335,25 +343,33 @@
     const FEATURE_EVERY = 2;
     const rows = [];
     let rowIndex = 0;
-    while (features.length || pool.length) {
-      // pick this row's anchor: a feature on the spread cadence (or once the
-      // pool is spent), otherwise the tallest remaining ordinary piece
+    while (pinned.length || features.length || pool.length) {
+      // pick this row's anchor: pinned pieces first, then a feature on the
+      // spread cadence (or once the pool is spent), otherwise the tallest
+      // remaining ordinary piece
       const wantFeature =
         features.length && (rowIndex % FEATURE_EVERY === 0 || !pool.length);
-      const anchor = wantFeature ? features.shift() : pool.shift();
+      const anchor = pinned.length
+        ? pinned.shift()
+        : wantFeature
+        ? features.shift()
+        : pool.shift();
       if (!anchor) break; // safety: guarantees progress
       const rowH = anchor.outerH;
       const anchorCol = [anchor];
       const fillers = [];
       let usedW = colWidthOf(anchorCol);
-      while (pool.length) {
-        const remW = W - usedW - gap;
-        if (remW < minW) break;
-        let col = buildColumn(rowH, remW, FILL_CAP); // small works stacked
-        if (!col.length) col = buildColumn(rowH, remW, 1); // fallback: same-size
-        if (!col.length) break;
-        fillers.push(col);
-        usedW += colWidthOf(col) + gap;
+      // fill beside the anchor: any remaining pinned pieces first, then the pool
+      for (const src of [pinned, pool]) {
+        while (src.length) {
+          const remW = W - usedW - gap;
+          if (remW < minW) break;
+          let col = buildColumn(src, rowH, remW, FILL_CAP); // small works stacked
+          if (!col.length) col = buildColumn(src, rowH, remW, 1); // fallback: same-size
+          if (!col.length) break;
+          fillers.push(col);
+          usedW += colWidthOf(col) + gap;
+        }
       }
 
       // Vary which side the anchor (the big piece) sits on so the large works
